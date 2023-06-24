@@ -1,0 +1,10 @@
+{
+    "host": "localhost",
+    "port": 8080,
+    "modelsDirectory": "./models",
+    "model": "open_llama_3b",
+    "models": 
+    [
+        "open_llama_3b"
+    ]
+}

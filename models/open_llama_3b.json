@@ -1,0 +1,19 @@
+{
+    "name": "open_llama_3b",
+    "path": "open_llama_3b/pytorch_model.bin",
+    "parameters": 
+    {
+        "temperature": 1.0,
+        "top_k": 40,
+        "top_p": 0.95,
+        "tfs": 1.0,
+        "typicalProb": 1.0,
+        "repeat_penalty": 1.0,
+        "frequency_penalty": 1.0,
+        "presence_penalty": 1.0,
+        "microstat": 0,
+        "microstat_tau": 5.0,
+        "microstat_eta": 0.1,
+        "length_penalty": 1.0
+    }
+}
