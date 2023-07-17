@@ -26,7 +26,7 @@ public:
     LlamaModel();
     ~LlamaModel();
 
-    bool loadModel(const std::string &modelName);
+    bool loadModel(const std::string &modelFile);
     bool loadPrompt(const std::string &prompt);
 
     void beginCompletion();

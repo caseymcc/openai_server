@@ -4,6 +4,7 @@ set(TARGET openai-server)
 project(${TARGET})
 
 option(OPENAI_SERVER_LLAMA "Use llama.cpp backend" ON)
+option(OPENAI_SERVER_LLAMACMD "Build llama cmd" OFF)
 option(OPENAI_SERVER_STABLEDIFFUSION "Use StableDiffusion backend" OFF)
 
 include(FetchContent)
@@ -11,7 +12,7 @@ include(FetchContent)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #add_compile_options(
-#    -Wno-zero-as-null-pointer-constant 
+#    -Wno-zero-as-null-pointer-constant
 #    -Wno-extra-semi-stmt
 #    -Wno-shadow
 #    -Wno-suggest-override
@@ -65,11 +66,18 @@ if(OPENAI_SERVER_LLAMA)
     #get llama.cpp
     FetchContent_Declare(
         llama
-        GIT_REPOSITORY "https://github.com/caseymcc/llama.cpp.git"
-        GIT_TAG rocm
+        GIT_REPOSITORY "https://github.com/ggerganov/llama.cpp.git"
+        GIT_TAG master-c2a08f8
         GIT_SHALLOW ON
         SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/deps/llama"
     )
+    #FetchContent_Declare(
+    #    llama
+    #    GIT_REPOSITORY "https://github.com/caseymcc/llama.cpp.git"
+    #    GIT_TAG rocm
+    #    GIT_SHALLOW ON
+    #    SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/deps/llama"
+    #)
     FetchContent_MakeAvailable(llama)
 endif()
 
@@ -85,7 +93,7 @@ set(${TARGET}_source
 add_executable(${TARGET} ${${TARGET}_source})
 
 #set_property(TARGET ${TARGET} PROPERTY CXX_STANDARD 17)
-target_include_directories(${TARGET} PUBLIC 
+target_include_directories(${TARGET} PUBLIC
     $<BUILD_INTERFACE:
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/deps/rapidjson/include
@@ -94,10 +102,29 @@ target_include_directories(${TARGET} PUBLIC
     >
 )
 target_compile_features(llama PUBLIC cxx_std_17) # don't bump
-target_link_libraries(${TARGET} PRIVATE 
-    cxxopts 
-    httplib 
+target_link_libraries(${TARGET} PRIVATE
+    cxxopts
+    httplib
     stduuid
-    llama 
+    llama
     ${CMAKE_THREAD_LIBS_INIT}
 )
+
+if(OPENAI_SERVER_LLAMACMD)
+    set(TARGET common)
+
+    add_library(common OBJECT
+        deps/llama/examples/common.h
+        deps/llama/examples/common.cpp
+    )
+
+    if (BUILD_SHARED_LIBS)
+        set_target_properties(common PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    endif()
+
+    target_include_directories(common PUBLIC deps/llama/examples/)
+    target_compile_features(common PUBLIC cxx_std_11)
+    target_link_libraries(common PRIVATE llama)
+
+    add_subdirectory(deps/llama/examples/main)
+endif()

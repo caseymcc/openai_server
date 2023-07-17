@@ -104,7 +104,7 @@ bool ModelServer::getModels(const std::string &modelDirectory, std::vector<std::
         fprintf(stderr, "Models path %s is not a directory\n", modelsPath.string().c_str());
         return false;
     }
-    
+
     std::filesystem::directory_iterator modelsDir(modelsPath);
 
     for(auto &modelFile:modelsDir)
@@ -140,6 +140,16 @@ bool ModelServer::getModels(const std::string &modelDirectory, std::vector<std::
     return (m_models.size()>0);
 }
 
+size_t ModelServer::getModelIndex(std::string modelName)
+{
+    auto modelIter=m_modelMap.find(modelName);
+
+    if(modelIter == m_modelMap.end())
+        return InvalidIndex;
+
+    return modelIter->second;
+}
+
 bool ModelServer::init(ServerOptions &serverOptions)
 {
     m_options=serverOptions;
@@ -167,7 +177,7 @@ void ModelServer::run()
     m_httpServer.Get("/", std::bind(&ModelServer::rootHandler, this, std::placeholders::_1, std::placeholders::_2));
     m_httpServer.Get("/v1/models", std::bind(&ModelServer::modelsHandler, this, std::placeholders::_1, std::placeholders::_2));
     m_httpServer.Get(R"(/v1/models/[^/]+)", std::bind(&ModelServer::modelsHandler, this, std::placeholders::_1, std::placeholders::_2));
-        
+
     std::function<void(const httplib::Request &, httplib::Response &)> completionHandlerFunc=std::bind(&ModelServer::completionHandler, this, std::placeholders::_1, std::placeholders::_2);
     m_httpServer.Post("/v1/completion", completionHandlerFunc);
     std::function<void(const httplib::Request &, httplib::Response &)> chatCompletionHandlerFunc=std::bind(&ModelServer::chatCompletionHandler, this, std::placeholders::_1, std::placeholders::_2);
@@ -182,6 +192,18 @@ void ModelServer::run()
 
 void ModelServer::runCmd()
 {
+    size_t modelIndex=getModelIndex(m_options.model);
+
+    if(modelIndex == InvalidIndex)
+    {
+        std::cout<<"Model "<<m_options.model<<" does not exist"<<std::endl;
+        return;
+    }
+
+    ModelDefinition &modelDefinition=m_models[modelIndex].definition;
+
+    m_llamaModel.loadModel(modelDefinition.path.c_str());
+
     while(true)
     {
         std::string cmd;
@@ -191,19 +213,26 @@ void ModelServer::runCmd()
         if(cmd == "exit")
             break;
 
+        m_llamaModel.reset();
+
+//        cmd+="\n";
         if(!m_llamaModel.loadPrompt(cmd))
         {
             std::cout<<"Context too long, please be more specific"<<std::endl;
             continue;
         }
 
+        std::cout<<"\n";
         m_llamaModel.beginCompletion();
 
         while(m_llamaModel.hasNextToken())
         {
-            m_llamaModel.doCompletion();
+            std::string newToken=m_llamaModel.doCompletion();
+
+            if(!newToken.empty())
+                std::cout<<newToken;
         }
-        std::cout<<m_llamaModel.getGeneratedText()<<std::endl;
+//        std::cout<<m_llamaModel.getGeneratedText()<<std::endl;
     }
 }
 
@@ -264,7 +293,7 @@ void ModelServer::modelHandler(const httplib::Request &req, httplib::Response &r
     jsonWriter.StartObject();
     jsonWriter.EndObject();
     jsonWriter.EndObject();
-    
+
     res.set_content(stringStream.GetString(), "application/json");
     res.status = 400;
 }
@@ -272,9 +301,9 @@ void ModelServer::modelHandler(const httplib::Request &req, httplib::Response &r
 void ModelServer::completionHandler(const httplib::Request &req, httplib::Response &res)
 {
     json::Document jsonDoc;
-    
+
     jsonDoc.Parse(req.body.c_str());
-    
+
     OpenAIOptions options=parseOptions(jsonDoc);
 
     if(m_currentModel < 0)
@@ -294,7 +323,7 @@ void ModelServer::completionHandler(const httplib::Request &req, httplib::Respon
         setErrorResponse(res, "Another model is already loaded, can only handle 1 at a time");
         return;
     }
-    
+
     if(!jsonDoc.HasMember("prompt"))
     {
         setErrorResponse(res, "Request does not have a prompt");
@@ -340,11 +369,11 @@ void ModelServer::completionHandler(const httplib::Request &req, httplib::Respon
         jsonWriter.Key("finish_reason");
         jsonWriter.String("length");
         jsonWriter.EndObject();
-        
+
         tokensPredicted++;
     }
     jsonWriter.EndArray();
-    
+
     jsonWriter.Key("id");
     jsonWriter.String(generateUUID().c_str());
     jsonWriter.Key("object");
@@ -362,9 +391,9 @@ void ModelServer::completionHandler(const httplib::Request &req, httplib::Respon
 void ModelServer::chatCompletionHandler(const httplib::Request &req, httplib::Response &res)
 {
 //    json::Document jsonDoc;
-//    
+//
 //    jsonDoc.Parse(req.body);
-//    
+//
 //    OpenAIOptions options=parseOptions(jsonDoc);
 //
 //    m_llamaModel.interactive = true;
@@ -396,9 +425,9 @@ void ModelServer::embeddingHandler(const httplib::Request &req, httplib::Respons
 //    }
 
     json::Document jsonDoc;
-    
+
     jsonDoc.Parse(req.body.c_str());
-    
+
     OpenAIOptions options=parseOptions(jsonDoc);
     std::vector<std::string> input;
 
@@ -452,7 +481,7 @@ void ModelServer::embeddingHandler(const httplib::Request &req, httplib::Respons
         jsonWriter.Key("index");
         jsonWriter.Uint(i);
 
-        jsonWriter.EndObject();        
+        jsonWriter.EndObject();
     }
 
     jsonWriter.EndArray();

@@ -1,6 +1,6 @@
 {
     "name": "open_llama_3b",
-    "path": "open_llama_3b/pytorch_model.bin",
+    "path": "open_llama_3b/ggml-model-f16.bin",
     "parameters": 
     {
         "temperature": 1.0,

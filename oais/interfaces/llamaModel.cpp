@@ -32,11 +32,11 @@ std::vector<llama_token> llamaTokenize(struct llama_context * ctx, const std::st
     return res;
 }
 
-bool LlamaModel::loadModel(const std::string &modelName)
+bool LlamaModel::loadModel(const std::string &modelFile)
 {
     m_params=llama_context_default_params();
-    m_context=llama_init_from_file(modelName.c_str(), m_params);
-    
+    m_context=llama_init_from_file(modelFile.c_str(), m_params);
+
     if(m_context == NULL)
     {
         fprintf(stderr, "%s: error: unable to load model\n", __func__);
@@ -48,14 +48,14 @@ bool LlamaModel::loadModel(const std::string &modelName)
         int error=llama_apply_lora_from_file(m_context,
             m_loraAdapter.c_str(), m_loraBase.empty() ? NULL : m_loraBase.c_str(),
             m_threadCount);
-            
+
         if(error != 0)
         {
             fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
             return false;
         }
     }
-    
+
     // determine newline token
     m_newLineTokens=llamaTokenize(m_context, "\n", false);
     m_lastTokens.resize(m_params.n_ctx);
@@ -68,7 +68,7 @@ bool LlamaModel::loadPrompt(const std::string &prompt)
 {
     m_prompt.push_back(' ');
     m_prompt.insert(m_prompt.end(), prompt.begin(), prompt.end());
-    
+
     std::vector<llama_token> promptTokens=llamaTokenize(m_context, m_prompt, true);
 
     if(m_tokensToKeep < 0)
@@ -83,7 +83,7 @@ bool LlamaModel::loadPrompt(const std::string &prompt)
         const int erasedTokens=(promptTokens.size()-m_tokensToKeep-left-1);
         std::vector<llama_token> tokens(promptTokens.begin(), promptTokens.begin()+m_tokensToKeep);
 
-        tokens.insert(tokens.end(), promptTokens.begin()+m_tokensToKeep+erasedTokens, promptTokens.end());   
+        tokens.insert(tokens.end(), promptTokens.begin()+m_tokensToKeep+erasedTokens, promptTokens.end());
         promptTokens=tokens;
 
         printf("input truncated, tokens: %d keep: %zu, left: %d\n", m_params.n_ctx, m_tokensToKeep, left);
@@ -97,13 +97,13 @@ bool LlamaModel::loadPrompt(const std::string &prompt)
     }
 
     m_evalPos=find_first_different(m_embeddedTokens, promptTokens);
-    
+
     m_embeddedTokens=promptTokens;
     if(m_evalPos == promptTokens.size())
     {
         --m_evalPos;
     }
-    
+
     printf("prompt ingested, eval pos: %zu\n", m_evalPos);
 
     m_hasNextToken=true;
@@ -148,7 +148,7 @@ llama_token LlamaModel::nextToken()
         }
         m_evalPos+=tokensToEval;
     }
-    
+
     float *logits=llama_get_logits(m_context);
     int vocabularySize=llama_n_vocab(m_context);
 
@@ -168,7 +168,7 @@ llama_token LlamaModel::nextToken()
     int32_t tokensToPenalize=m_tokensToPenalize<0?m_params.n_ctx:m_tokensToPenalize;
     llama_token_data_array candidatesPenalties={candidates.data(), candidates.size(), false};
     float newLineToken=logits[llama_token_nl()];
-    
+
     tokensToPenalize=std::min(std::min((int32_t)m_lastTokens.size(), tokensToPenalize), m_params.n_ctx);
 
     llama_sample_repetition_penalty(m_context, &candidatesPenalties,
@@ -231,7 +231,7 @@ llama_token LlamaModel::nextToken()
         m_hasNextToken=false;
         return tokenId;
     }
-    
+
     m_hasNextToken=((m_tokensPredicted == -1) || (m_tokensLeft != 0));
     return tokenId;
 }
@@ -239,8 +239,8 @@ llama_token LlamaModel::nextToken()
 std::string LlamaModel::doCompletion()
 {
     llama_token token=nextToken();
-    std::string tokenText;
-    
+    std::string tokenText="test";
+
     if(token != -1)
     {
         tokenText=llama_token_to_str(m_context, token);
@@ -314,11 +314,14 @@ std::vector<float> LlamaModel::embedding(const std::string &content)
 void LlamaModel::reset()
 {
 //    m_antiPrompt.clear();
+    m_predictCount=-1;
     m_generatedText="";
     m_generatedText.reserve(m_params.n_ctx);
     m_stoppingWord="";
     m_stopType=StopType::None;
-    
+
+    m_multibytePending=0;
+
     m_tokensPredicted=0;
 }
 

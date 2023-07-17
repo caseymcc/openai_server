@@ -13,6 +13,8 @@
 namespace oais
 {
 
+constexpr size_t InvalidIndex=std::numeric_limits<size_t>::max();
+
 struct ModelInterface
 {
     std::string name;
@@ -59,6 +61,7 @@ public:
 
 private:
     bool getModels(const std::string &modelDirectory, std::vector<std::string> &models);
+    size_t getModelIndex(std::string modelName);
 
     ServerOptions m_options;
 
